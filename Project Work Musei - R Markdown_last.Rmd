@@ -1,0 +1,1560 @@
+---
+title: "Indagine sui Musei italiani"
+author: 'Ghione Alessia, Loccioni Gabriele, Roma Alessandro'
+date: "2025-06-30"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+### Project Work in R - Un'indagine sui Musei in Italia nel 2022
+
+```{r setup, include=FALSE}
+# Importazione delle Librerie
+
+knitr::opts_chunk$set(echo = FALSE)
+
+library(readr)
+library(dplyr)
+library(knitr)
+library(forcats)
+library(ggplot2)
+library(scales)
+library(ggmosaic)
+library(ggpubr)
+library(moments)
+library(tidyr)
+library(tibble) 
+```
+
+## Introduzione
+
+L’indagine su “Musei e le istituzioni similari” è stata realizzata nella cornice del “Protocollo d’intesa per lo sviluppo del sistema informativo integrato su istituti e luoghi di cultura” siglato dall’Istat, il Ministero della Cultura (MiC), le Regioni e le Province autonome di Trento e di Bolzano il 06.12.2017.
+La rilevazione, a carattere censuario, è stata effettuata attraverso la compilazione di questionari online da parte dei responsabili di ciascuna unità presente nella lista di partenza ed ha interessato tutti gli istituti pubblici e privati, statali e non statali, di diversa tipologia e dimensione, aperti al pubblico nell’anno 2022 purché con modalità di fruizione regolamentata e organizzata.
+In particolare, per definire le unità statistiche oggetto d'analisi occorre far riferimento alla definizione dell’International Council of Museums (ICOM), secondo la quale “Il museo è un’istituzione permanente, senza scopo di lucro, al servizio della società, e del suo sviluppo, aperta al pubblico, che effettua ricerche sulle testimonianze materiali ed immateriali dell’uomo e del suo ambiente, le acquisisce, le conserva, e le comunica e specificatamente le espone per scopi di studio, educazione e diletto”.
+Ai fini dell’indagine è stata considerata eleggibile ogni struttura che possiede i seguenti requisiti: 1) Espone in modo permanente beni e/o collezioni di interesse culturale, artistico, storico e/o naturalistico; 2) È aperta al pubblico nell’anno di riferimento; 3) È dotata di forme organizzate di fruizione.
+
+```{r warning = FALSE}
+# Importiamo il dataset 2022 e controllo iniziale variabili
+
+musei_full <- read_tsv("MUSEI_Microdati_2022.txt", show_col_types = FALSE)
+```
+
+## 1. Raccolta dei Dati, Data Exploration e Data Cleaning
+
+### 1.1 Raccolta dei Dati
+
+Sulla base dei dati ufficiali messi a disposizione da Istat, sono state contattate diverse migliaia di strutture museali e istituzioni similari presenti sul territorio nazionale, al fine di definire l’universo di osservazione per l’indagine statistica dell'anno 2022.
+Tra queste, risultavano eleggibili, ossia in possesso dei requisiti necessari per rientrare nel perimetro della rilevazione, circa 4.900 strutture.
+A tale numero contribuivano anche le realtà rilevate autonomamente dalla Conferenza Episcopale Italiana, per quanto riguarda le strutture ecclesiastiche, e dall’Astat.
+Una parte delle strutture contattate non è stata inclusa nell’universo osservato perché non rispondente ai criteri richiesti, in quanto non aperta al pubblico, non musealizzata o ancora in fase progettuale.
+Al termine delle operazioni di verifica e validazione, risultavano effettivamente attive e aperte alla pubblica fruizione 4.416 strutture relative a istituzioni museali su scala nazionale.
+L’Istat ha condotto la rilevazione a carattere censuario tra fine marzo e fine giugno 2023, inviando le credenziali e le password del questionario online, tramite invio postale, per posta certificata o per mail, ai direttori/responsabili dei musei e istituti similari a carattere museale: l'a rilevazione'indagine è stata condotta attraverso questionari a risposta chiusa, con opzioni predefinite codificate in formato alfanumerico, al fine di garantire l’omogeneità e la standardizzazione dei dati raccolti.
+Il dataset risultante è un file in formato .txt liberamente consultabile attraverso il sito ufficiale dell’Istat (<https://www.istat.it>).
+
+### 1.2 Data Exploration
+
+Il dataset originale comprende 4.416 osservazioni relative a 113 variabili.
+Ciascuna unità statistica corrisponde a una singola struttura museale presente sul territorio italiano.
+Le colonne del dataset, in linea con la struttura dei questionari somministrati, sono prevalentemente di tipo alfanumerico, in quanto riportano le codifiche delle risposte chiuse, fatta eccezione per alcune variabili numeriche come il numero di visitatori e le percentuali di visitatori italiani e stranieri.
+Un primo controllo esplorativo tramite le funzioni summary(), dim() e str() rivela la presenza di formati incoerenti o errati, che compromettono la corretta interpretazione delle variabili e generano statistiche descrittive non affidabili.
+Tale situazione conferma la necessità di un accurato processo di pulizia preliminare del dataset.
+
+```{r include = FALSE, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+# Esplorazione del dataset Musei 2022
+
+str(musei_full)
+dim(musei_full)
+summary(musei_full)
+```
+
+### 1.3 Scelta delle variabili e Data Cleaning
+
+La selezione preliminare delle variabili si concentra su quelle ritenute più rilevanti ai fini dell’analisi, in quanto forniscono informazioni di contesto territoriale (Regione, Provincia, Comune), identificative (Denominazione del museo), strutturali (Tipologia, Categoria, Gestione) e relative alla fruizione (gratuità, digitalizzazione) e al numero di visitatori.
+Inoltre -da un primo confronto con le altre escluse- tali variabili presentano una percentuale di valori mancanti contenuta rispetto alla dimensione complessiva del dataset, garantendo una base informativa più solida per le successive elaborazioni.
+Le variabili scelte vengono quindi rinominate con etichette più intuitive e leggibili.
+Successivamente si interviene sulla formattazione dei dati, uniformando i formati e trattando correttamente i valori mancanti: in particolare, vengono ricodificati come NA i valori non disponibili o errati (come "." o "N.D."), le variabili categoriali vengono convertite in fattori e le variabili numeriche in formato intero, previa rimozione di eventuali spazi o simboli anomali.
+Inoltre, a partire dalle percentuali rilevate, abbiamo creato due nuove variabili (numero di visitatori italiani e stranieri per ciascuna struttura).
+La correttezza della trasformazione viene infine verificata tramite le funzioni str() e sapply() per controllare il tipo di variabili e la gestione dei valori mancanti, assicurandosi che siano riconosciuti correttamente da R come NA.
+
+```{r include = FALSE, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+musei <- musei_full %>%
+  select(
+    Regione,
+    Provincia,
+    Comune,
+    Nome = DENOMINAZIONE,
+    Categoria = CATEGO,
+    Tipologia = TIPOL1,
+    Gestione_Pubblica_Privata = PUBBPRIV,
+    Gratuito_Pagamento=ACCESSO,
+    Visitatori_Totali = TOTVISIT,
+    Percentuale_Italiani = ITALIANI,
+    Percentuale_Stranieri = STRANIERI,
+    Digitalizzazione=DIGITALIZZ1
+  )
+
+# Conversione del formato delle variabili
+musei <- musei %>%
+  mutate(
+    Nome = na_if(Nome, "N.D."),
+    Gratuito_Pagamento = as.factor(na_if(Gratuito_Pagamento, ".")),
+    Digitalizzazione = as.factor(na_if(Digitalizzazione, ".")),
+    Visitatori_Totali = as.integer(trimws(replace(Visitatori_Totali, Visitatori_Totali == ".", NA))),
+    Percentuale_Italiani = as.integer(trimws(replace(Percentuale_Italiani, Percentuale_Italiani == ".", NA))),
+    Percentuale_Stranieri = as.integer(trimws(replace(Percentuale_Stranieri, Percentuale_Stranieri == ".", NA))),
+    across(c(Categoria, Tipologia, Gestione_Pubblica_Privata, ), as.factor),
+
+    # Calcolo numero assoluto di italiani e stranieri
+    Totale_Italiani = round(Visitatori_Totali * Percentuale_Italiani / 100),
+    Totale_Stranieri = round(Visitatori_Totali * Percentuale_Stranieri / 100)
+    
+  )
+
+# Verifica correttezza tipo variabili e numero valori missing
+str(musei)
+sapply(musei, function(x) sum(is.na(x)))
+```
+
+Vengono infine applicate etichette descrittive alle variabili, al fine di facilitare la lettura e l’interpretazione dei dati, nonché per consentire la corretta conversione delle codifiche alfanumeriche in fattori, migliorando così la qualità e la comprensione del dataset per le analisi successive.
+
+```{r echo = F, results = 'hide'}
+# Applicazione delle label per avere maggiore leggibilità dei valori alfanumerici quando si fanno grafici e tabelle.
+musei <- musei %>%
+  mutate(
+    Gestione_Pubblica_Privata = fct_recode(Gestione_Pubblica_Privata,
+      "Pubblico" = "1",
+      "Privato" = "2"
+    ),
+                        
+    Tipologia = fct_recode(Tipologia,
+      "Arte: da Medioevo a Ottocento" = "1",
+      "Arte: Moderna e Contemporanea" = "2", 
+      "Religione e Culto" = "3",
+      "Archeologia" = "4",
+      "Storia" = "5",
+      "Storia Naturale e Scienze Naturali" = "6",
+      "Scienza e Tecnica" = "7",
+      "Etnografia e Antropologia" = "8",
+      "Tematico e/o Specializzato" = "9",
+      "Industriale e/o d'Impresa" = "10",
+      "Casa Museo/Casa della Memoria" = "11",
+      "Altro Tipo (Museo)" = "12",
+      "Area Archeologica" = "13",
+      "Parco Archeologico" = "14",
+      "Altro Tipo (Area Archeologica)" = "15",
+      "Chiesa/Edificio a Carattere Religioso" = "16",
+      "Villa-Palazzo di interesse Storico-Artistico" = "17",
+      "Parco-Giardino di interesse Storico-Artistico" = "18",
+      "Architettura Fortificata/Militare" = "19",
+      "Architettura Civile di interesse Storico-Artistico" = "20",
+      "Manufatto Archeologico" = "21",
+      "Manufatto di  Archeologia Industriale" = "22",
+      "Altro Tipo (Monumento)" = "23"
+    ),
+    Categoria = fct_recode(Categoria,
+      "Museo/Galleria" = "1",
+      "Area Archeologica" = "2", 
+      "Monumento" = "3"
+    ),
+    Gratuito_Pagamento = fct_recode(Gratuito_Pagamento,
+      "Accesso completamente gratuito" = "1",
+      "Previste forme di pagamento" = "2"
+    ),
+    Digitalizzazione=fct_recode(Digitalizzazione,
+      "Si, interamente"="1",	 	
+      "Si, una parte"="2", 	
+      "No, non ancora"="3",	 	
+      "No, non disponeva di beni da digitalizzare"="4"                         
+    )                            
+  )
+```
+
+## 2. Esplorazione della variabile quantitativa Visitatori Totali
+
+### 2.1 Analisi della distribuzione della variabile Visitatori Totali
+
+La distribuzione della variabile Visitatori Totali nei musei analizzati evidenzia una forte concentrazione di valori bassi, con pochissimi casi estremamente elevati.
+Il primo quartile si attesta su 500 visitatori, il che significa che il 25% dei musei ha accolto meno di 500 persone.
+La mediana è pari a 2.252 visitatori.
+La media, collocandosi su un valore molto più elevato della mediana e pari a 24.782 visitatori, segnala un'importante asimmetria: poche strutture con afflussi eccezionalmente elevati influenzano in modo significativo la media complessiva.
+Il valore elevatissimo della deviazione standard (168.937,8), a fronte di una media relativamente molto più bassa, è coerente con la presenza di alta variabilità nella distribuzione (range: 5,8 milioni).
+Il terzo quartile (pari a 9.211 visitatori) è ancora molto lontano dal valore massimo osservato.
+
+L'analisi grafica conferma quanto emerso dai dati numerici: - Il boxplot risulta fortemente compresso nella parte bassa del grafico, con numerosi outlier visibili sopra il limite superiore, a testimonianza dell'estrema variabilità e della presenza di valori anomali molto elevati e distanti dai quartili.
+- L'istogramma con curva di densità evidenzia una distribuzione con coda lunga verso destra, caratteristica tipica delle variabili con concentrazione di valori bassi e pochi picchi elevati.
+
+Dal punto di vista statistico, i valori calcolati di asimmetria (Skewness) e Curtosi confermano questa lettura: la Skewness è pari a 21,84, un valore estremamente elevato, che indica una distribuzione fortemente sbilanciata a destra, con pochi musei che registrano numeri di visitatori eccezionali rispetto alla media, mentre la Curtosi, pari 603,38, rivela una distribuzione con code molto pesanti e una forte presenza di valori estremi, ben oltre i normali limiti di una distribuzione gaussiana.
+D'altra parte, all'estremo opposto, la presenza di alcuni piccoli musei attestati a 0 visitatori potrebbe segnalare chiusure temporanee dovute a eventi particolari (restauro, manutenzione) o errori nella rilevazione/raccolta dati alla fonte con perdita d'informazione.
+
+In sintesi, i dati mostrano una situazione in cui la maggior parte dei musei registra afflussi contenuti, mentre poche strutture di richiamo internazionale attraggono volumi di visitatori enormemente superiori alla media, generando così una distribuzione estremamente asimmetrica e con forte presenza di outlier.
+
+```{r echo=FALSE, warning=FALSE}
+
+# Distribuzione della variabile Visitatori Totali.
+summary(musei$`Visitatori_Totali`)
+# Calcolo Deviazione standard
+dev_std <- sd(musei$Visitatori_Totali, na.rm = TRUE)
+cat("Deviazione standard:", round(dev_std, 2), "\n")
+
+# Calcolo range come differenza Max - Min
+valori_range <- range(musei$Visitatori_Totali, na.rm = TRUE)
+range_diff <- diff(valori_range)
+
+cat("Minimo:", valori_range[1], "\n")
+cat("Massimo:", valori_range[2], "\n")
+cat("Range (Max - Min):", range_diff, "\n")
+
+
+# Istogramma Totale Visitatori (frequenze)
+ggplot(musei %>% filter(!is.na(Visitatori_Totali) & Visitatori_Totali > 0), 
+       aes(x = Visitatori_Totali)) +
+  geom_histogram(fill = "steelblue", color = "black", bins = 30) +
+  scale_x_continuous(labels = comma) +  # numeri leggibili sull'asse x
+  labs(title = "Istogramma Totale Visitatori", x = "Numero Totale Visitatori", y = "Frequenza") +
+  theme_minimal()
+
+# Calcolo della Skewness e Curtosi 
+skew <- skewness(musei$Visitatori_Totali, na.rm = TRUE)
+kurt <- kurtosis(musei$Visitatori_Totali, na.rm = TRUE)
+
+# Istogramma Totale Visitatori con curva di densità
+ggplot(musei %>% filter(!is.na(Visitatori_Totali) & Visitatori_Totali > 0), 
+       aes(x = Visitatori_Totali)) +
+  geom_histogram(aes(y = ..density..), fill = "steelblue", color = "black", bins = 30, alpha = 0.6) +
+  geom_density(color = "orange", size = 1) +  
+  scale_x_continuous(labels = comma) +     # Asse X leggibile
+  scale_y_continuous(labels = comma) +     # Asse Y leggibile
+  labs(title = "Istogramma Totale Visitatori con Curva di Densità",
+       x = "Numero Totale Visitatori",
+       y = "Densità",
+       caption = sprintf("Skewness: %.2f; Curtosi: %.2f", skew, kurt)) +
+  theme_minimal()
+
+# Boxplot su Totale Visitatori
+ggplot(musei %>% filter(Visitatori_Totali > 0 & !is.na(Visitatori_Totali)), 
+       aes(y = Visitatori_Totali)) +
+  geom_boxplot(fill = "steelblue", alpha = 0.7) +
+  labs(title = "Boxplot Totale Visitatori (scala lineare)", y = "Numero Totale Visitatori") +
+  scale_y_continuous(labels = comma) +  # numeri leggibili con le virgole
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank(),  # nasconde i numeri asse x
+    axis.ticks.x = element_blank()  # nasconde i tick asse x
+  )
+```
+
+### 2.2 Suddivisione del dataset in 5 classi di grandezza
+
+Fatte le precisazioni del paragrafo precedente, abbiamo perciò ritenuto opportuno suddividere il dataset in cinque sottogruppi, accorpando i musei in: *musei piccoli*, *musei medio-piccoli*, *musei medi*, *musei medio-grandi* e *musei grandi*.
+La scelta del numero di classi è stata arbitraria, così come lo sono state anche le soglie che determinano l’appartenenza di un museo a una classe piuttosto che a un’altra.
+Abbiamo cercato di bilanciare il numero di musei per classe, limitando al contempo la presenza di outlier.
+L’obiettivo era ottenere classi il più possibile omogenee dal punto di vista della distribuzione.
+Questo, naturalmente, risulta più difficile per le classi agli estremi: *musei piccoli* include diversi casi con visitatori pari a zero, mentre *musei grandi* comprende i principali musei italiani, con numeri che arrivano a milioni di visitatori.
+
+In parallelo, abbiamo anche creato una variabile logaritmica del numero di visitatori, nel tentativo di rendere la distribuzione dei dati più vicina alla normalità.
+
+```{r echo=FALSE, warning=FALSE}
+# Creo le classi ordinali
+classi_visitatori <- musei %>%
+  mutate(classe_visitatori = case_when(
+    Visitatori_Totali < 2000 ~ "Piccoli",
+    Visitatori_Totali >= 2000 & Visitatori_Totali < 5000 ~ "Medio-piccoli",
+    Visitatori_Totali >= 5000 & Visitatori_Totali < 30000 ~ "Medi",
+    Visitatori_Totali >= 30000 & Visitatori_Totali < 100000 ~ "Medio-grandi",
+    Visitatori_Totali >= 100000 ~ "Grandi",
+    TRUE ~ NA_character_
+  )) %>%
+  mutate(classe_visitatori = factor(classe_visitatori, 
+                                    levels = c("Piccoli", "Medio-piccoli", "Medi", "Medio-grandi", "Grandi"), 
+                                    ordered = TRUE))
+
+# Trasformazione logaritmica sicura, serve ad evitare che in caso di Visitatori pari a 0 il logaritmo vada ad infinito: log1p(x) = log(x + 1)
+classi_visitatori$Visitatori_log <- log1p(classi_visitatori$Visitatori_Totali)
+
+
+# Slicing dataset musei e creazione delle 5 classi dimensionali dei musei (per numero di visitatori)
+musei_grandi <- classi_visitatori %>% filter(classe_visitatori == "Grandi")
+musei_medio_grandi <- classi_visitatori %>% filter(classe_visitatori == "Medio-grandi")
+musei_medi <- classi_visitatori %>% filter(classe_visitatori == "Medi")
+musei_medio_piccoli <- classi_visitatori %>% filter(classe_visitatori == "Medio-piccoli")
+musei_piccoli <- classi_visitatori %>% filter(classe_visitatori == "Piccoli")
+```
+
+La trasformazione logaritmica del numero di visitatori migliora la distribuzione, ma non risolve del tutto il problema degli outlier.
+Tuttavia, contribuisce in modo significativo a ridurre la varianza, rendendo i dati più gestibili per le analisi statistiche.
+
+```{r echo=FALSE}
+# Distribuzione Visitatori Totali in scala log: visualizzazione con Boxplot 
+ggplot(musei %>% filter(Visitatori_Totali > 0 & !is.na(Visitatori_Totali)), 
+       aes(y = Visitatori_Totali)) +
+  geom_boxplot(fill = "steelblue", alpha = 0.7) +
+  scale_y_log10(labels = scales::comma_format(accuracy = 1)) +
+  labs(title = "Boxplot Totale Visitatori (Scala Logaritmica)", 
+       y = "Numero Totale Visitatori (scala log)") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_blank(),    
+    axis.ticks.x = element_blank(),   
+    axis.title.x = element_blank()    
+  )
+
+# Distribuzione delle 5 classi di Visitatori Totali in scala log: visualizzazione con Boxplot 
+ggplot(classi_visitatori %>% filter(!is.na(classe_visitatori) & Visitatori_Totali > 0), 
+       aes(y = classe_visitatori, x = Visitatori_Totali)) +
+  geom_boxplot(fill = "steelblue", alpha = 0.6) +
+  scale_x_log10(labels = scales::comma) +
+  labs(title = "Distribuzione Visitatori per Classe (Scala Logaritmica)",
+       y = "Dimensione Museo",
+       x = "Numero Totale Visitatori (scala log)") +
+  theme_minimal() +
+  coord_cartesian(clip = "off") +
+  theme(plot.margin = margin(t = 10, r = 50, b = 10, l = 10))
+```
+
+## 3 Distribuzione dei Musei sul Territorio nazionale
+
+### 3.1 Distribuzione dei Musei nelle Regioni con evidenza della Città con più Musei per ciascuna Regione
+
+Il grafico mostra la distribuzione totale dei musei per ciascuna Regione italiana, evidenziando in modo distinto il contributo della città con il maggior numero di musei all'interno di ogni Regione.
+La barra grigia rappresenta il totale dei musei presenti nella Regione, mentre la porzione colorata indica il contributo della città con più musei (qui rinominata Top Città) rispetto al totale regionale.
+
+Dalla tabella e dal grafico emerge che, salvo poche eccezioni, la città con il maggior numero di musei coincide con il capoluogo di Regione.
+Roma è la città con più musei in Italia e registra anche il contributo più rilevante sul totale regionale: 101 musei su 302 presenti nel Lazio.
+La Toscana, prima Regione per numero complessivo di musei (530), mostra invece una distribuzione più diffusa sul territorio, con Firenze che ospita 63 musei, pari a una quota meno concentrata rispetto ad altre Regioni.
+
+```{r echo=FALSE, warning=FALSE}
+
+# Totale musei per Regione
+musei_tot <- musei %>%
+  group_by(Regione) %>%
+  summarise(Totale_musei = n(), .groups = "drop")
+
+# Città principale per Regione
+musei_top <- musei %>%
+  group_by(Regione, Comune) %>%
+  summarise(N_musei = n(), .groups = "drop") %>%
+  group_by(Regione) %>%
+  arrange(desc(N_musei)) %>%
+  slice(1) %>%
+  rename(Citta_principale = Comune, Musei_citta = N_musei)
+
+# Dati finali
+dati_finali <- musei_tot %>%
+  left_join(musei_top, by = "Regione") %>%
+  mutate(Altri_musei = Totale_musei - Musei_citta)
+
+# Tabella per la distribuzione delle frequenze assolute
+dati_finali %>%
+  select(Regione, Citta_principale, Totale_musei, Musei_citta, Altri_musei) %>%
+  arrange(desc(Totale_musei)) %>%
+  kable(
+    caption = "Distribuzione dei Musei per Regione e per Città principale",
+    col.names = c("Regione", "Città principale", "Totale Musei", "N. Musei nella Top Città", "Numero Musei nelle altre Città"),
+    align = 'l'
+  )
+
+
+# Grafico a barre impilate per rappresentare quota di musei per città principale in ogni regione 
+
+ggplot(dati_finali, aes(x = reorder(Regione, -Totale_musei))) +
+  geom_bar(aes(y = Totale_musei), stat = "identity", fill = "#F2F2F2") +
+  geom_bar(aes(y = Musei_citta, fill = Citta_principale), stat = "identity") +
+  scale_fill_manual(values = c(
+    "#1B9E77", "#D95F02", "#7570B3", "#FFD700", "#66A61E",
+    "#E6AB02", "#A6761D", "#666666", "#1F78B4", "#33A02C",
+    "#FB9A99", "#B15928", "#A6CEE3", "#E63946", "#CAB2D6",
+    "#6A3D9A", "#FF7F00", "#984EA3", "#FC8D62", "#8DA0CB"
+  )) +
+  labs(
+    title = "Distribuzione del Numero di Musei per Regione e Incidenza della Città Principale",
+    x = "Regione",
+    y = "Numero di Musei",
+    fill = "Città principale"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "right",
+    legend.key.width = unit(1.2, "cm"),
+    legend.text = element_text(size = 8),
+    plot.margin = margin(t=10, r=30, b=10, l=10)
+  ) +
+  guides(fill = guide_legend(ncol = 2, byrow = TRUE))
+```
+
+### 3.2 Distribuzione dei Musei nelle Regioni: frequenze relative percentuali
+
+In termini percentuali, la Toscana è la Regione con il maggior numero di musei, rappresentando circa il 12% del totale nazionale, seguita da Emilia-Romagna e Lombardia.
+La Campania risulta la prima Regione del Sud, posizionandosi al nono posto complessivo.
+
+```{r echo=FALSE}
+# Totale dei musei 
+totale_musei <- nrow(musei %>% filter(!is.na(Regione)))
+
+# Frequenze relative percentuali Musei per Regione
+musei_perc_regione <- musei %>%
+  group_by(Regione) %>%
+  summarise(
+    Totale_musei = n(),
+    Percentuale = Totale_musei / totale_musei * 100,
+    .groups = "drop"
+  )
+
+# Grafico a barre 
+ggplot(musei_perc_regione, aes(x = reorder(Regione, -Percentuale), y = Percentuale)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(
+    title = "Percentuale Musei per Regione",
+    x = "Regione",
+    y = "Percentuale (%)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+### 3.3 Distribuzione dei Musei nelle Top Città: distribuzione delle frequenze relative percentuali regionali.
+
+In termini percentuali, Roma è la città con il maggior numero di musei rispetto al totale della propria Regione, seguita da Matera, Trieste e Genova.
+In questi casi, la concentrazione di musei nella principale città regionale è particolarmente elevata, indicando una forte centralizzazione dell'offerta culturale.
+Al contrario, le città con il minor contributo percentuale al totale regionale risultano essere Cagliari, Reggio Calabria e Pesaro, dove la distribuzione dei musei è più diffusa sul territorio o il capoluogo ha un peso meno rilevante.
+
+```{r echo=FALSE}
+# Musei per Regione e Comune
+musei_per_comune <- musei %>%
+  group_by(Regione, Comune) %>%
+  summarise(N_musei = n(), .groups = "drop")
+
+# Totale Musei per Regione
+musei_tot_regione <- musei %>%
+  group_by(Regione) %>%
+  summarise(Totale_musei = n(), .groups = "drop")
+
+# Top Città per Regione con frequenze relative percentuali
+top_citta <- musei_per_comune %>%
+  left_join(musei_tot_regione, by = "Regione") %>%
+  mutate(Percentuale_citta = N_musei / Totale_musei * 100) %>%
+  group_by(Regione) %>%
+  arrange(desc(Percentuale_citta)) %>%
+  slice(1) %>%
+  ungroup()
+
+# Grafico a barre delle frequenze relative percentuali della Top Città per numero di Musei per ciascuna Regione
+
+ggplot(top_citta, aes(x = reorder(Regione, -Percentuale_citta), y = Percentuale_citta, fill = Comune)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Percentuali dei Musei della Top Città per Regione",
+    x = "Regione",
+    y = "Percentuale (%)",
+    fill = "Top Città per numero Musei"
+  ) +
+  scale_fill_manual(values = c(
+    "#1B9E77", "#D95F02", "#7570B3", "#FFD700", "#66A61E",
+    "#E6AB02", "#A6761D", "#666666", "#1F78B4", "#33A02C",
+    "#FB9A99", "#B15928", "#A6CEE3", "#E63946", "#CAB2D6",
+    "#6A3D9A", "#FF7F00", "#984EA3", "#FC8D62", "#8DA0CB"
+  )) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  guides(fill = guide_legend(ncol = 2, byrow = TRUE))
+```
+
+### 3.4 Distribuzione dei Musei nelle Top Città: frequenze relative percentuali.
+
+In termini di frequenze relative percentuali, il contributo delle singole Top Città sul totale nazionale dei musei mostra che Roma detiene la quota più alta con il 2,29%, seguita da Firenze con l’1,43% e Milano con l’1,15%.
+L’aggregato delle 20 Top Città copre complessivamente il 12,76% dell’intera offerta museale italiana, evidenziando una significativa concentrazione di musei in alcune aree urbane di rilievo.
+
+```{r echo=FALSE}
+# Totale musei Italia
+tot_musei_italia <- nrow(musei)
+
+# Tabella finale percentuali su totale Italia
+dati_finali_perc <- musei_tot %>%
+  left_join(musei_top, by = "Regione") %>%
+  mutate(
+    Altri_musei = Totale_musei - Musei_citta,
+    Percentuale_citta = Musei_citta / tot_musei_italia * 100,
+    Percentuale_altri = Altri_musei / tot_musei_italia * 100
+  )
+
+# Tabella delle frequenze relative
+dati_finali_perc %>%
+  select(Citta_principale, Percentuale_citta, Percentuale_altri) %>%
+  arrange(desc(Percentuale_citta)) %>%
+  mutate(
+    Percentuale_citta = sprintf("%.2f%%", Percentuale_citta),
+    Percentuale_altri = sprintf("%.2f%%", Percentuale_altri)
+  ) %>%
+  kable(
+    caption = "Distribuzione Percentuale dei Musei: Contributo delle Top Città e Altri Comuni",
+    col.names = c("Top Città", "% Musei nella Top Città su Totale Italia", "% Musei negli Altri Comuni su Totale Italia"),
+    align = 'l'
+  )
+
+# Grafico delle frequenze relative percentuali delle Top Città
+ ggplot(dati_finali_perc %>% filter(Citta_principale != "Altri Comuni"), 
+       aes(x = reorder(Citta_principale, Percentuale_citta), y = Percentuale_citta)) +
+  geom_bar(stat = "identity", fill = "#66A61E") +
+  labs(
+    title = "Percentuale Musei delle Top Città sul Totale Musei in Italia",
+    x = "Città",
+    y = "Percentuale sul Totale Musei Italia (%)"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  coord_flip() +
+  theme_minimal()
+```
+
+## 4 Distribuzione dei Visitatori museali sul Territorio nazionale
+
+### 4.1 Distribuzione dei Visitatori nelle Regioni con evidenza della Città più visitata per ciascuna Regione
+
+In termini di numero di visitatori, il Lazio si conferma nettamente la prima Regione italiana.
+Come evidenziato dalla tabella e dal grafico, il contributo di Roma risulta determinante, rappresentando una quota pressoché esclusiva del totale regionale.
+È interessante notare come, considerando il parametro dei visitatori, alcune Top Città siano cambiate rispetto alla classificazione basata sul numero di musei.
+Ad esempio, Andria in Puglia, Bard in Valle d’Aosta e Orvieto in Umbria emergono ora come le città con il maggior numero di visitatori nelle rispettive regioni.
+Questa alternativa definizione di Top Città, basata sul maggior numero di visitatori per Regione, offre una visione più precisa e aggiornata dell’importanza culturale delle città all’interno del territorio.
+
+```{r echo=FALSE}
+# Totale visitatori per Regione
+visitatori_regione <- musei %>%
+  group_by(Regione) %>%
+  summarise(Totale_visitatori_reg = sum(Visitatori_Totali, na.rm = TRUE), .groups = "drop")
+
+# Visitatori per Comune e Regione, il Top Comune è questa volta quello con più visitatori per Regione
+visitatori_comune <- musei %>%
+  group_by(Regione, Comune) %>%
+  summarise(Visitatori_com = sum(Visitatori_Totali, na.rm = TRUE), .groups = "drop") %>%
+  group_by(Regione) %>%
+  arrange(desc(Visitatori_com)) %>%
+  slice(1) %>%
+  rename(Citta_princ = Comune, Visitatori_citta_princ = Visitatori_com)
+
+# Unione delle tabelle 
+dati_vis <- visitatori_regione %>%
+  left_join(visitatori_comune, by = "Regione") %>%
+  mutate(
+    Visitatori_altri = Totale_visitatori_reg - Visitatori_citta_princ
+  )
+
+# Creazione della tabella per frequenze assolute di visitatori per Regione e per Top Città della Regione
+dati_vis %>%
+  mutate(
+    Totale_visitatori_reg = format(Totale_visitatori_reg, big.mark = ".", decimal.mark = ",", scientific = FALSE),
+    Visitatori_citta_princ = format(Visitatori_citta_princ, big.mark = ".", decimal.mark = ",", scientific = FALSE),
+    Visitatori_altri = format(Visitatori_altri, big.mark = ".", decimal.mark = ",", scientific = FALSE)
+  ) %>%
+  select(Regione, Citta_princ, Totale_visitatori_reg, Visitatori_citta_princ, Visitatori_altri) %>%
+  arrange(desc(Totale_visitatori_reg)) %>%
+  kable(
+    caption = "Distribuzione dei Visitatori per Regione e per Città principale",
+    col.names = c("Regione", "Città principale", "Totale Visitatori", "Visitatori nella Top Città", "Visitatori nelle altre Città"),
+    align = 'l'
+  )
+
+# Grafico a barre impilate per mostrare quota di visitatori Top Città rispetto a regione
+ggplot(dati_vis, aes(x = reorder(Regione, -Totale_visitatori_reg))) +
+  geom_bar(aes(y = Totale_visitatori_reg), stat = "identity", fill = "#F2F2F2") +
+  geom_bar(aes(y = Visitatori_citta_princ, fill = Citta_princ), stat = "identity") +
+  labs(
+    title = "Visitatori per Regione e Incidenza della Città Principale",
+    x = "Regione",
+    y = "Numero di Visitatori",
+    fill = "Top Città per Numero di Visitatori"
+  ) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_fill_manual(values = c(
+    "#1B9E77", "#D95F02", "#7570B3", "#FFD700", "#8DA0CB",
+    "#E6AB02", "#A6761D", "#666666", "#1F78B4", "#33A02C",
+    "#FB9A99", "#B15928", "#A6CEE3", "#E63946", "#CAB2D6",
+    "#6A3D9A", "#FF7F00", "#984EA3", "#66A61E", "#FC8D62" 
+  )) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "right",
+    legend.key.width = unit(1.2, "cm"),
+    legend.text = element_text(size = 8),
+    plot.margin = margin(t=10, r=30, b=10, l=10)
+  ) +
+  guides(fill = guide_legend(ncol = 2, byrow = TRUE))
+```
+
+### 4.2 Distribuzione dei Visitatori nelle Regioni: frequenze relative percentuali
+
+Analizzando la distribuzione percentuale dei visitatori museali, emerge chiaramente come oltre la metà del flusso totale sia concentrata nelle regioni Lazio, Toscana e Campania, a testimonianza del forte richiamo culturale e turistico di queste aree.
+Al contrario, il contributo delle regioni Abruzzo, Basilicata e Molise risulta molto contenuto, rappresentando una quota decisamente marginale nel panorama complessivo della fruizione museale italiana.
+
+```{r  echo=FALSE}
+# Totale visitatori nel dataset
+totale_visitatori <- sum(musei$Visitatori_Totali, na.rm = TRUE)
+
+# Frequenze relative percentuali Visitatori per Regione
+visitatori_perc_regione <- musei %>%
+  group_by(Regione) %>%
+  summarise(
+    Totale_visitatori = sum(Visitatori_Totali, na.rm = TRUE),
+    Percentuale = Totale_visitatori / totale_visitatori * 100,
+    .groups = "drop"
+  )
+
+# Grafico a barre sulla distribuzione delle frequenze relative percentuali dei Visitatori per ogni Regione
+ggplot(visitatori_perc_regione, aes(x = reorder(Regione, -Percentuale), y = Percentuale)) +
+  geom_bar(stat = "identity", fill = "#B22222") +
+  labs(
+    title = "Percentuali del Numero di Visitatori per Regione",
+    x = "Regione",
+    y = "Percentuale (%)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### 4.3 Distribuzione dei Visitatori nelle Top Città: distribuzione delle frequenze relative percentuali regionali
+
+Come già intuibile, la maggior parte dei visitatori nel Lazio è concentrata a Roma, che da sola attrae nove visitatori su dieci nella Regione.
+Particolarmente rilevante è anche il contributo di città come Trieste e Milano, che si distinguono nelle rispettive Regioni per il numero di visitatori museali.
+Invece, tra le Top Città per visitatori, Arzachena in Sardegna registra il contributo più contenuto.
+
+```{r echo=FALSE}
+# Visitatori per Regione e Comune
+visitatori_per_comune <- musei %>%
+  group_by(Regione, Comune) %>%
+  summarise(Visitatori_citta = sum(Visitatori_Totali, na.rm = TRUE), .groups = "drop")
+
+# Totale Visitatori per Regione
+visitatori_tot_regione <- musei %>%
+  group_by(Regione) %>%
+  summarise(Totale_visitatori = sum(Visitatori_Totali, na.rm = TRUE), .groups = "drop")
+
+# Top Città per Regione con frequenze relative percentuali sui visitatori
+top_citta_visitatori <- visitatori_per_comune %>%
+  left_join(visitatori_tot_regione, by = "Regione") %>%
+  mutate(Percentuale_citta = Visitatori_citta / Totale_visitatori * 100) %>%
+  group_by(Regione) %>%
+  arrange(desc(Percentuale_citta)) %>%
+  slice(1) %>%
+  ungroup()
+
+# Grafico a barre delle frequenze relative percentuali della Top Città per Visitatori per ciascuna Regione
+
+ggplot(top_citta_visitatori, aes(x = reorder(Regione, -Percentuale_citta), y = Percentuale_citta, fill = Comune)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Percentuali del Numero di Visitatori della Top Città per Regione",
+    x = "Regione",
+    y = "Percentuale (%)",
+    fill = "Top Città per Numero di Visitatori"
+  ) +
+  scale_y_continuous(
+    limits = c(0, 100),                     # forza l’intervallo 0-100
+    breaks = seq(0, 100, 10),               # (opz.) tacche ogni 10
+    labels = percent_format(scale = 1)      # (opz.) etichette “0% … 100%”
+  ) +
+scale_fill_manual(values = c(
+    "#1B9E77", "#D95F02", "#7570B3", "#FFD700", "#8DA0CB",
+    "#E6AB02", "#A6761D", "#666666", "#1F78B4", "#33A02C",
+    "#FB9A99", "#B15928", "#A6CEE3", "#E63946", "#CAB2D6",
+    "#6A3D9A", "#FF7F00", "#984EA3", "#66A61E", "#FC8D62" 
+)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  guides(fill = guide_legend(ncol = 2, byrow = TRUE))
+```
+
+### 4.4 Distribuzione dei Visitatori nelle Top Città: frequenze relative percentuali
+
+Infine, analizzando le frequenze relative percentuali dei visitatori sul territorio nazionale, emerge un quadro piuttosto diverso rispetto alla distribuzione dei musei nelle Top Città (paragrafo 3.4).
+In questo caso, la concentrazione è fortemente sbilanciata a favore di Roma, che da sola rappresenta il 21,6% del totale dei visitatori museali in Italia, seguita a distanza da Firenze e Milano.
+Un aspetto interessante riguarda la distribuzione interna alla Regione: mentre nel Lazio il turismo museale è quasi esclusivamente concentrato nella Capitale, in regioni come Toscana e Campania la percentuale di visitatori che scelgono le Top Città è più bilanciata rispetto a quella di chi preferisce altre mete culturali all’interno della stessa Regione.
+Questo suggerisce dinamiche diverse di attrattività e di domanda culturale tra le diverse aree territoriali.
+
+```{r echo=FALSE}
+# Tabella finale con differenziazione delle percentuali di città principale e degli altri comuni sul totale Italia
+dati_vis_perc <- dati_vis %>%
+  mutate(
+    Percentuale_citta_princ = Visitatori_citta_princ / totale_visitatori * 100,
+    Percentuale_altri = Visitatori_altri / totale_visitatori * 100
+  )
+
+# Tabella delle frequenze relative percentuali delle Top Città nel contesto nazionale
+dati_vis_perc %>%
+  select(Citta_princ, Percentuale_citta_princ, Percentuale_altri) %>%
+  arrange(desc(Percentuale_citta_princ)) %>%
+  mutate(
+    Percentuale_citta_princ = sprintf("%.2f%%", Percentuale_citta_princ),
+    Percentuale_altri = sprintf("%.2f%%", Percentuale_altri)
+  ) %>%
+  kable(
+    caption = "Distribuzione Percentuale dei Visitatori: Contributo della Città Principale e degli Altri Comuni",
+    col.names = c("Città Principale", "% Visitatori nella Città Principale su Totale Italia", "% Visitatori negli Altri Comuni su Totale Italia"),
+    align = 'l'
+  )
+
+# Preparazione del dataset per il grafico con le frequenze relative percentuali delle Top Città
+frequenze_top_citta_visitatori <- dati_vis %>%
+  select(Citta_princ, Visitatori_citta_princ) %>%
+  mutate(
+    Percentuale_su_tot_italia = Visitatori_citta_princ / totale_visitatori * 100
+  )
+
+# Grafico delle frequenze relative percentuali sul panorama italiano
+ggplot(frequenze_top_citta_visitatori, 
+       aes(x = reorder(Citta_princ, Percentuale_su_tot_italia), y = Percentuale_su_tot_italia)) +
+  geom_bar(stat = "identity", fill = "#FFA500") +
+  labs(
+    title = "Frequenze relative percentuali: Città Principali sul Totale Visitatori in Italia",
+    x = "Città",
+    y = "Percentuale sul Totale Visitatori Italia (%)"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  coord_flip() +
+  theme_minimal()
+
+
+```
+
+## 5. Distribuzione dei Musei Pubblici e Privati per Modalità di Accesso (Gratuito o a Pagamento)
+
+Per quanto riguarda questa analisi, il mosaic plot mostra già in maniera chiara che sebbene la quota di musei pubblici sia differente dalla quota di musei privati, la proporzione di musei con accesso gratuito o a pagamento è abbastanza simile tra le due gestioni.
+Questa visualizzazione ci aiuta a capire che non c’è una forte differenza tra i musei pubblici e privati riguardo alla modalità di accesso: la distribuzione tra gratuito e pagamento è sostanzialmente equilibrata all’interno di entrambe le categorie.
+
+```{r echo=FALSE, warning=FALSE}
+musei %>%
+  filter(!is.na(Gestione_Pubblica_Privata), !is.na(Gratuito_Pagamento)) %>%
+  ggplot() +
+  geom_mosaic(aes(
+    weight = 1,
+    x = product(Gestione_Pubblica_Privata),
+    fill = Gratuito_Pagamento
+  )) +
+  labs(
+    title = "Musei Pubblici e Privati per Accesso Gratuito o a Pagamento",
+    x = "Tipologia di Gestione",
+    fill = "Tipologia di Accesso"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    panel.grid = element_blank()
+  )
+```
+
+### 5.1 Test del Chi-quadro per approfondire la relazione tra Musei Pubblici-Privati e Modalità di Accesso
+
+Per approfondire l'analisi, eseguiamo un test del Chi-quadro che mostra il seguente risultato:
+
+```{r echo=FALSE}
+
+# Creazione della tabella di contingenza
+tab_gestione_accesso <- table(
+  musei$Gestione_Pubblica_Privata,
+  musei$Gratuito_Pagamento,
+  useNA = "no"
+)
+
+# Test Chi-quadro
+test_chi_gestione_accesso <- chisq.test(tab_gestione_accesso)
+
+# Risultato test
+test_chi_gestione_accesso 
+
+# Visualizza le frequenze attese: sono tutte ampiamente >=5, il test è affidabile
+exp_accesso <- test_chi_gestione_accesso$expected
+
+kable(round(exp_accesso, 1),
+      caption = "Frequenze attese: accesso x gestione",
+      align   = "r")   
+```
+
+L'alto p-value (0.5419) e il basso valore del Chi-quadro indicano che non c’è evidenza di una relazione significativa tra la gestione (pubblica/privata) e il tipo di accesso (gratuito/a pagamento).
+In altre parole, il test conferma che la distribuzione dei musei pubblici e privati non differisce in modo statisticamente significativo per quanto riguarda la gratuità o meno dell'accesso.
+
+## 6 Relazione tra Distribuzione dei Musei Pubblici-Privati e Categoria
+
+Il grafico a barre mostra la distribuzione dei musei suddivisi per categoria e tipologia di gestione.
+Si osserva chiaramente come le aree archeologiche siano principalmente gestite da enti pubblici, rappresentando la maggior parte delle barre in questa categoria per la gestione pubblica.
+Al contrario, le altre categorie di musei tendono a essere più bilanciate.
+Questa distribuzione suggerisce che la tipologia di gestione varia sensibilmente in base alla categoria museale, con alcune categorie fortemente associate alla gestione pubblica, mentre altre mostrano una composizione più equilibrata tra pubblico e privato.
+
+```{r echo=FALSE}
+
+# Calcolo frequenze assolute per Gestione e Categoria
+count_gest_categoria <- musei %>%
+  group_by(Gestione_Pubblica_Privata, Categoria) %>%
+  summarise(Conteggio = n(), .groups = "drop")
+
+# Grafico barre affiancate
+ggplot(count_gest_categoria, aes(x = Categoria, y = Conteggio, fill = Gestione_Pubblica_Privata)) +
+  geom_bar(stat = "identity", position = position_dodge()) +   # position_dodge() per barre affiancate
+  labs(
+    title = "Distribuzione Musei Pubblici e Privati per Categoria",
+    x = "Categoria Museo",
+    y = "Numero di Musei",
+    fill = "Gestione"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+### 6.1 Test del Chi-quadro per approfondire la relazione tra la Distribuzione dei Musei Pubblici-Privati e Categoria
+
+Per approfondire l'analisi, eseguiamo un test del Chi-quadro che mostra il seguente risultato:
+
+```{r echo=FALSE}
+# Creazione tabella di contingenza
+tab_gestione_categoria <- table(musei$Gestione_Pubblica_Privata, musei$Categoria)
+
+# Test Chi-quadro
+test_chi_gestione_categoria <- chisq.test(tab_gestione_categoria)
+
+# Risultato test
+test_chi_gestione_categoria
+
+# Frequenze attese: controlla che siano tutte >= 5 per garantire l'affidabilità del test
+exp_gestione <- test_chi_gestione_categoria$expected
+
+kable(round(exp_gestione, 1),
+      caption = "Frequenze attese: gestione x categoria",
+      align   = "r")   
+```
+
+Il test del Chi-quadro mostra un'associazione statisticamente significativa tra la tipologia di gestione (pubblica o privata) e la categoria del museo (χ² = 121.03, df = 2, p \< 0.05).
+Questo indica che la distribuzione delle categorie museali non è indipendente dalla gestione.
+
+La forte predominanza pubblica delle aree archeologiche contribuisce in modo rilevante all'associazione osservata, suggerendo — in linea con le informazioni emerse dal grafico precedente — che alcune categorie di musei tendano ad essere gestite quasi esclusivamente da enti pubblici.
+
+## 7 Distribuzione dei Musei Pubblici-Privati per Tipologia
+
+Ogni categoria museale è suddivisa in ulteriori tipologie.
+Quando un museo non rientra perfettamente in nessuna delle tipologie elencate, l’Istat lo colloca in “Altro Tipo”, indicando tra parentesi la categoria di appartenenza.
+Per rendere il grafico più leggibile, abbiamo quindi scelto di posizionare tutte le voci “Altro Tipo” in fondo all’elenco.
+
+Dal grafico emerge una netta predominanza della gestione pubblica nelle tipologie legate all’ambito archeologico, come le aree archeologiche e i parchi archeologici.
+Al contrario, si osserva una prevalenza di musei a gestione privata nelle categorie legate al patrimonio religioso e al culto, confermando una distinzione nella gestione in funzione della natura e della finalità dei musei stessi.
+
+```{r echo=FALSE}
+# Contare musei per Tipologia e Gestione_Pubblica_Privata
+tipologie_count <- musei %>%
+  count(Tipologia, Gestione_Pubblica_Privata) %>%
+  arrange(n)
+
+# 'Tipologia' in character prima di qualunque rielaborazione
+tipologie_count <- tipologie_count %>%
+  mutate(Tipologia = as.character(Tipologia))
+
+# Forzare "Altro Tipo (Museo / Area Archeologica / Monumento)" in fondo
+tipologie_in_fondo <- c("Altro Tipo (Museo)", "Altro Tipo (Area Archeologica)", "Altro Tipo (Monumento)")
+
+# Ricostruisci ordered_levels come vettore di caratteri pulito e unico
+ordered_levels <- tipologie_count %>%
+  group_by(Tipologia) %>%
+  summarise(tot = sum(n), .groups = "drop") %>%
+  arrange(desc(tot)) %>%                          
+  pull(Tipologia) %>%
+  setdiff(tipologie_in_fondo) %>%          
+  c(tipologie_in_fondo)                     
+
+# Applica l’ordine e poi inverti:
+tipologie_count <- tipologie_count %>% 
+  mutate(
+    Tipologia = factor(Tipologia, levels = ordered_levels) |> 
+                fct_rev()
+  )
+
+# Grafico a barre orizzontali diviso per gestione
+ggplot(tipologie_count, aes(x = Tipologia, y = n, fill = Gestione_Pubblica_Privata)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  coord_flip() +
+  labs(
+    title = "Numero di Musei Pubblici e Privati per Tipologia",
+    x = "Tipologia",
+    y = "Numero Musei",
+    fill = "Gestione"
+  ) +
+  theme_minimal()
+```
+
+## 8 Distribuzione delle Categorie per Visitatori nelle varie classi di grandezza museale
+
+Il grafico seguente mostra la distribuzione delle tre categorie in ciascuna classe dimensionale del dataset.
+Da un’analisi visiva preliminare emerge una differenza tra le distribuzioni dei visitatori nelle tre categorie all'interno dei musei di dimensioni piccole e grandi.
+In particolare, nei musei piccoli la categoria "Area/Parco Archeologico" presenta una distribuzione con valori di visitatori tendenzialmente più elevati, evidenziata da una mediana che si avvicina maggiormente al terzo quartile rispetto alle altre due categorie.
+
+```{r echo=FALSE}
+
+# Pre-cleaning di analisi 
+classi_visitatori_clean <- classi_visitatori %>%
+  filter(!is.na(Visitatori_log), is.finite(Visitatori_log))
+
+# Breaks nuovi per visualizzazione migliore (log1p varia la scala)
+breaks_originali <- c(10, 100, 1000, 10000, 100000, 1000000)
+
+# Trasformo in log1p per posizionarli sull'asse x
+breaks_log <- log1p(breaks_originali)
+
+# Grafico con relazione Classe Musei->Visitatori Totali log
+ggplot(classi_visitatori_clean, aes(y = classe_visitatori, x = Visitatori_log, fill = Categoria)) +
+  geom_boxplot(alpha = 0.7, position = position_dodge(width = 0.8)) +
+  scale_x_continuous(
+    breaks = breaks_log,
+    labels = scales::comma(breaks_originali)
+  ) +
+  labs(
+    y = "Classe Musei (Numero di Visitatori)",
+    x = "Visitatori Totali (scala log)",
+    fill = "Categoria"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### 8.1 Test della normalità
+
+Per avere una immagine più chiara della eventuale differenza nella distribuzione dei musei per categoria all'interno delle varie classi, attuiamo un'analisi preliminare che capire la distribuzione dei dati per poi scegliere l'analisi statistica più appropriata.
+
+Per il test sulla normalità preliminare all'ANOVA, utilizziamo il test Kolmogorov-Smirnov perchè il dataset non è sufficientemente piccolo per utilizzare il test Shapiro.
+
+```{r echo=FALSE, warning=FALSE}
+#musei grandi
+normal_grandi <- musei_grandi %>% 
+  drop_na(Visitatori_Totali) %>%       
+  group_by(Categoria) %>%            
+  summarise(
+  p_value_norm_mus_grandi=ks.test(Visitatori_Totali,"pnorm",mean(Visitatori_Totali),sd(Visitatori_Totali))$p.value)
+
+normal_grandi
+
+
+#musei medio-grandi
+normal_medio_grandi <- musei_medio_grandi %>% 
+  drop_na(Visitatori_Totali) %>%       
+  group_by(Categoria) %>%            
+  summarise(
+  p_value_norm_mus_medio_grandi=ks.test(Visitatori_Totali,"pnorm",mean(Visitatori_Totali),sd(Visitatori_Totali))$p.value)
+
+normal_medio_grandi
+
+
+#musei medi
+normal_medi <- musei_medi %>% 
+  drop_na(Visitatori_Totali) %>%       
+  group_by(Categoria) %>%            
+  summarise(
+  p_value_norm_mus_medi=ks.test(Visitatori_Totali,"pnorm",mean(Visitatori_Totali),sd(Visitatori_Totali))$p.value)
+
+normal_medi
+
+
+#musei medio-piccoli
+normal_medio_piccoli <- musei_medio_piccoli %>% 
+  drop_na(Visitatori_Totali) %>%       
+  group_by(Categoria) %>%            
+  summarise(
+  p_value_norm_mus_medio_piccoli=ks.test(Visitatori_Totali,"pnorm",mean(Visitatori_Totali),sd(Visitatori_Totali))$p.value)
+
+normal_medio_piccoli
+
+
+#musei piccoli
+normal_piccoli <- musei_piccoli %>% 
+  drop_na(Visitatori_Totali) %>%       
+  group_by(Categoria) %>%            
+  summarise(
+  p_value_norm_mus_piccoli=ks.test(Visitatori_Totali,"pnorm",mean(Visitatori_Totali),sd(Visitatori_Totali))$p.value)
+
+normal_piccoli
+```
+
+Visualizziamo i risultati graficamente:
+
+```{r echo=FALSE, warning=FALSE}
+# 1. Funzione che costruisce il QQ‑plot per un dataframe
+
+qq_by_cat <- function(df, titolo) {
+  ggqqplot(
+    df, x = "Visitatori_Totali", facet.by = "Categoria",
+    nrow = 1,            
+    title = titolo
+  ) +
+    scale_y_continuous(labels = comma, limits = c(0, NA))+
+    theme_bw()
+}
+
+# 2. Un plot per ciascuna taglia di museo 
+
+# Musei grandi
+qq_by_cat(
+  musei_grandi %>% drop_na(Visitatori_Totali),
+  "QQ plot visitatori totali – musei grandi"
+)
+
+# Musei medio‑grandi
+qq_by_cat(
+  musei_medio_grandi %>% drop_na(Visitatori_Totali),
+  "QQ plot visitatori totali – musei medio grandi"
+)
+
+# Musei medi
+qq_by_cat(
+  musei_medi %>% drop_na(Visitatori_Totali),
+  "QQ plot visitatori totali – musei medi"
+)
+
+# Musei medio‑piccoli
+qq_by_cat(
+  musei_medio_piccoli %>% drop_na(Visitatori_Totali),
+  "QQ plot visitatori totali – musei medio piccoli"
+)
+
+# Musei piccoli
+qq_by_cat(
+  musei_piccoli %>% drop_na(Visitatori_Totali),
+  "QQ plot visitatori totali – musei piccoli"
+)
+```
+
+Nonostante il tentativo di normalizzazione applicato il precedenza, i risultati del test Kolmogorov-Smiknov rifiutano l'ipotesi della normalità della distribuzione per ogni campione del sottogruppo di riferimento.
+La visualizzazione grafica del QQ-plot aiuta a comprendere visivamente che non c'è normalità in nessuna delle categorie di ciascun sottogruppo.
+
+Venendo a mancare il primo presupposto per applicare una ANOVA, dovremo procedere con un test non parametrico.
+
+### 8.2 Test dell'omogeneità delle varianze
+
+Per completezza, calcoliamo anche il test sull'omogeneità delle varianze (Bartlett test).
+
+```{r echo=FALSE}
+#musei grandi
+bartlett.test(musei_grandi$Visitatori_Totali~musei_grandi$Categoria)
+
+#musei medio-grandi
+bartlett.test(musei_medio_grandi$Visitatori_Totali~musei_medio_grandi$Categoria)
+
+#musei medi
+bartlett.test(musei_medi$Visitatori_Totali~musei_medi$Categoria)
+
+#musei medio-piccoli
+bartlett.test(musei_medio_piccoli$Visitatori_Totali~musei_medio_piccoli$Categoria)
+
+#musei piccoli
+bartlett.test(musei_piccoli$Visitatori_Totali~musei_piccoli$Categoria)
+```
+
+I risultati del test di Bartlett indicano un quadro abbastanza omogeneo, con un’unica eccezione rilevante.
+L'elevato numero di visitatori nei musei più importanti fa sì che nel sottogruppo musei grandi si verifica una varianza eccessivamente disomogenea tra ogni categoria perché si soddisfino l'ipotesi di omogeneità delle varianze per il test di Bartlett.
+Il p‑value estremamente piccolo (\< 0,05) segnala che le varianze dei visitatori totali differiscono in modo marcato fra le tre categorie (museo/galleria, parco archeologico, monumento).
+In questa fascia, quindi, l’assunzione di omogeneità delle varianze richiesta dall’ANOVA classica non è soddisfatta.
+In tutte le altre classi dimensionali i p‑value sono ben al di sopra della soglia di 0,05.
+Di conseguenza non abbiamo evidenza statistica di varianze differenti tra le categorie: l’ipotesi di omogeneità non viene rifiutata e l’ANOVA standard resterebbe teoricamente appropriata se ci fosse stata normalità nella distribuzione.
+
+Verificato che mancano i prerequisiti necessari all'applicazione dell'ANOVA, proseguiamo con un test non parametrico.
+
+### 8.3 Kruskal-Wallis
+
+```{r echo=FALSE}
+#musei grandi
+kruskal.test(musei_grandi$Visitatori_Totali~musei_grandi$Categoria)
+
+#musei medio-grandi
+kruskal.test(musei_medio_grandi$Visitatori_Totali~musei_medio_grandi$Categoria)
+
+#musei medi
+kruskal.test(musei_medi$Visitatori_Totali~musei_medi$Categoria)
+
+#musei medio-piccoli
+kruskal.test(musei_medio_piccoli$Visitatori_Totali~musei_medio_piccoli$Categoria)
+
+#musei piccoli
+kruskal.test(musei_piccoli$Visitatori_Totali~musei_piccoli$Categoria)
+
+```
+
+È stato applicato il test non parametrico di Kruskal-Wallis per confrontare le distribuzioni del numero totale di visitatori tra le diverse categorie museali (Museo/Galleria, Area Archeologica, Monumento) all’interno di ciascuna classe di grandezza.
+
+I risultati indicano che:
+
+-   Per le classi “medi” e “piccoli”, si osserva una differenza statisticamente significativa tra le distribuzioni dei visitatori nelle tre categorie museali (p \< 0.05).
+    Questo suggerisce che, in queste classi dimensionali, la categoria museale influisce in modo rilevante sulla frequenza di visita.
+
+-   Per le altre classi (grandi, medio-grandi, medio-piccoli), il test non evidenzia differenze statisticamente significative (p \> 0.05).
+    Non possiamo perciò rifiutare l'ipotesi di uguaglianza tra le mediane tra le categorie museali.
+
+### 8.4 Pairwise Wilcoxon Test
+
+Proseguiamo andando a esplorare le differenze tra categoria, nelle classi musei "medi" e "piccoli", dove il test precedente ha evidenziato differenze tra mediane.
+
+```{r echo=FALSE}
+pairwise.wilcox.test(musei_medi$Visitatori_Totali, musei_medi$Categoria, p.adjust.method = "bonferroni")
+
+pairwise.wilcox.test(musei_piccoli$Visitatori_Totali, musei_piccoli$Categoria, p.adjust.method = "bonferroni")
+```
+
+Per i "Musei medi" si osserva una differenza significativa nel numero di visitatori tra Musei/Gallerie e Monumenti/Complessi Monumentali, suggerendo una diversa attrattività tra queste due categorie.
+Non emergono invece differenze significative tra Musei e Aree Archeologiche, né tra Aree Archeologiche e Monumenti.
+
+Per quanto riguarda i "Musei piccoli" le Aree/ Parchi Archeologici si distinguono sia dai Musei/Gallerie sia dai Monumenti, indicando che il loro numero di visitatori segue una distribuzione mediana diversa.
+Nessuna differenza significativa tra Musei e Monumenti.
+
+### 8.5 Visualizzazione grafica differenze del pairwise
+
+```{r echo=FALSE}
+# Boxplot con confronti Wilcoxon e annotazioni p-value
+ggboxplot(musei_medi, x = "Categoria", y = "Visitatori_Totali", fill = "Categoria", palette = "Set2") +
+  stat_compare_means(method = "wilcox.test", label = "p.signif", 
+                     comparisons = list(
+                       c("Area Archeologica", "Museo/Galleria"),
+                       c("Area Archeologica", "Monumento"),
+                       c("Museo/Galleria", "Monumento")
+                     )) 
+
+# Boxplot con confronti Wilcoxon e annotazioni p-value
+ggboxplot(musei_piccoli, x = "Categoria", y = "Visitatori_Totali", fill = "Categoria", palette = "Set2") +
+  stat_compare_means(method = "wilcox.test", label = "p.signif", 
+                     comparisons = list(
+                       c("Area Archeologica", "Museo/Galleria"),
+                       c("Area Archeologica", "Monumento"),
+                       c("Museo/Galleria", "Monumento")
+                     ))
+```
+
+## 9 Distribuzione Pubblico-Privato per Visitatori
+
+Confronto visuale del numero visitatori per gestione Pubblica e Privata per ciascuna classe di grandezza di museo.
+
+```{r echo = FALSE}
+# Pre-cleaning analisi 
+classi_visitatori_clean <- classi_visitatori %>%
+  filter(!is.na(Visitatori_log), is.finite(Visitatori_log))
+
+# Breaks asse leggibile
+breaks_originali <- c(10, 100, 1000, 10000, 100000, 1000000)
+breaks_log <- log1p(breaks_originali)
+
+# Grafico: Classe Musei -> Visitatori Totali (log1p) con distinzione Pubblico/Privato
+ggplot(classi_visitatori_clean, aes(y = classe_visitatori, x = Visitatori_log, fill = Gestione_Pubblica_Privata)) +
+  geom_boxplot(alpha = 0.7, position = position_dodge(width = 0.8)) +
+  scale_x_continuous(
+    breaks = breaks_log,
+    labels = scales::comma(breaks_originali)
+  ) +
+  labs(
+    y = "Classe Musei (Numero di Visitatori)",
+    x = "Visitatori Totali (scala log)",
+    fill = "Gestione"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+### 9.1 Welch test su numero visitatori per gestione Pubblica o Privata
+
+Per avere una immagine più chiara della eventuale differenza nella distribuzione dei musei per tipo di gestione all'interno delle varie classi applichiamo un Welch Two Sample t-test, che mostra se esistono differenze tra le medie all'interno di ogni sottoclasse di dimensione del museo.
+
+Dato che la dimensione dei campioni per ogni sottoclasse è sufficientemente grande, grazie al Teorema del Limite Centrale la distribuzione della media campionaria tende ad essere approssimativamente normale, anche se i dati originali non lo sono.
+Pertanto, si può procedere con l'applicazione del Welch Two Sample t-test, che è appropriato anche quando le varianze e le dimensioni dei campioni sono diverse o non note.
+
+```{r echo = FALSE}
+# musei grandi
+musei_grandi_pubb <- musei_grandi %>% filter(Gestione_Pubblica_Privata == "Pubblico")
+musei_grandi_priv <- musei_grandi %>% filter(Gestione_Pubblica_Privata == "Privato")
+t.test(musei_grandi_priv$Visitatori_Totali, musei_grandi_pubb$Visitatori_Totali)
+
+# musei_medio_grandi
+musei_medio_grandi_pubb <- musei_medio_grandi %>% filter(Gestione_Pubblica_Privata == "Pubblico")
+musei_medio_grandi_priv <- musei_medio_grandi %>% filter(Gestione_Pubblica_Privata == "Privato")
+t.test(musei_medio_grandi_priv$Visitatori_Totali, musei_medio_grandi_pubb$Visitatori_Totali)
+
+# musei_medi
+musei_medi_pubb <- musei_medi %>% filter(Gestione_Pubblica_Privata == "Pubblico")
+musei_medi_priv <- musei_medi %>% filter(Gestione_Pubblica_Privata == "Privato")
+t.test(musei_medi_priv$Visitatori_Totali, musei_medi_pubb$Visitatori_Totali)
+
+# musei_medio_piccoli
+musei_medio_piccoli_pubb <- musei_medio_piccoli %>% filter(Gestione_Pubblica_Privata == "Pubblico")
+musei_medio_piccoli_priv <- musei_medio_piccoli %>% filter(Gestione_Pubblica_Privata == "Privato")
+t.test(musei_medio_piccoli_priv$Visitatori_Totali, musei_medio_piccoli_pubb$Visitatori_Totali)
+
+# musei_piccoli
+musei_piccoli_pubb <- musei_piccoli %>% filter(Gestione_Pubblica_Privata == "Pubblico")
+musei_piccoli_priv <- musei_piccoli %>% filter(Gestione_Pubblica_Privata == "Privato")
+t.test(musei_piccoli_priv$Visitatori_Totali, musei_piccoli_pubb$Visitatori_Totali)
+```
+
+Il test t di Welch non evidenzia alcuna differenza significativa nel numero medio di visitatori tra musei pubblici e privati in nessuna delle classi di grandezza in cui era stato suddiviso il dataset originale.
+L'intervallo di confidenza è ampio e comprende lo zero, il che non permette di escludere che la differenza tra le medie di visitatori tra musei pubblici e privati sia nulla.
+
+Come dal grafico precedente non si evidenzia particolare differenza nella distribuzione e nel valore delle mediane per ogni sottoclasse di grandezza, ugualmente il test t di Welch suggerisce che anche il numero medio di visitatori per le due tipologie di gestione (pubblico - privato) non differisce in maniera significativa, il che indica che non si può escludere che le differenze osservate siano dovute al caso.
+
+## 10 T-test su percentuale stranieri per classe dimensionale museo
+
+Nell'ambito dell'analisi dei flussi turistici museali, la percentuale di visitatori stranieri rappresenta un indicatore rilevante per comprendere il grado di attrattività internazionale delle strutture.
+Al fine di approfondire il ruolo delle diverse tipologie museali rispetto al pubblico estero, si è condotto un confronto statistico tra gruppi di musei classificati per caratteristiche dimensionali o funzionali.
+
+In particolare, l'obiettivo è verificare se esistono differenze significative nella media della percentuale di visitatori stranieri tra le diverse classi di musei.
+A tal fine, si è applicato un t test ad una coda per confrontare la percentuale media di turisti stranieri nei musei italiani con le percentuali medie calcolate nei vari sottogruppi.
+
+```{r echo=FALSE}
+md_perc_str <- mean(musei$Percentuale_Stranieri, na.rm=TRUE)
+
+print(paste("Media delle percentuali di visitatori stranieri per museo in Italia è:", sprintf("%.5f", md_perc_str)))
+
+t.test(musei_grandi$Percentuale_Stranieri, mu = md_perc_str, na.rm = TRUE, alternative = "greater")
+
+t.test(musei_medio_grandi$Percentuale_Stranieri, mu = md_perc_str, na.rm = TRUE, alternative = "greater")
+
+t.test(musei_medi$Percentuale_Stranieri, mu = md_perc_str, na.rm = TRUE, alternative = "greater")
+
+t.test(musei_medio_piccoli$Percentuale_Stranieri, mu = md_perc_str, na.rm = TRUE, alternative = "greater")
+
+t.test(musei_piccoli$Percentuale_Stranieri, mu = md_perc_str, na.rm = TRUE, alternative = "greater")
+
+```
+
+Nei musei grandi, medio-grandi e medi, la percentuale media di visitatori stranieri è significativamente maggiore della media complessiva (circa 21.5%), con valori medi rispettivamente intorno al 39%, 33% e 24% (intervallo di confidenza al 95%).
+I p-value molto bassi confermano questa differenza.
+
+Al contrario, per i musei medio-piccoli e piccoli, il test non rileva differenze significative in senso maggiore (p-value vicino a 1), quindi non si può rifiutare l'ipotesi nulla che afferma che la percentuale di stranieri sia minore o uguale di 21.5% in questi gruppi.
+
+## 11 Digitalizzazione nei Musei e quota di Visitatori italiani e stranieri
+
+I grafici seguenti mostrano la distribuzione di visitatori italiani e stranieri per livello di digitalizzazione dei beni esposti nei vari musei.
+Da una prima analisi emerge una situazione molto variegata che cambia a seconda delle dimensione dei musei.
+
+```{r echo = FALSE}
+# Piccoli
+musei_digitalizzazione_piccoli <- musei_piccoli %>%
+  pivot_longer(cols = c(Totale_Italiani, Totale_Stranieri),
+               names_to = "Nazionalita",
+               values_to = "Totale")
+
+musei_digitalizzazione_piccoli %>%
+  filter(!is.na(Totale), !is.na(Digitalizzazione)) %>%
+  group_by(Nazionalita, Digitalizzazione) %>%
+  summarise(Totale = sum(Totale), .groups = "drop") %>%
+  ggplot(aes(x = Digitalizzazione, y = Totale, fill = Nazionalita)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = comma) +
+  labs(title = "Digitalizzazione - Musei Piccoli",
+       x = "Digitalizzazione",
+       y = "Numero di Visitatori") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Medio-Piccoli
+musei_digitalizzazione_medio_piccoli <- musei_medio_piccoli %>%
+  pivot_longer(cols = c(Totale_Italiani, Totale_Stranieri),
+               names_to = "Nazionalita",
+               values_to = "Totale")
+
+musei_digitalizzazione_medio_piccoli %>%
+  filter(!is.na(Totale), !is.na(Digitalizzazione)) %>%
+  group_by(Nazionalita, Digitalizzazione) %>%
+  summarise(Totale = sum(Totale), .groups = "drop") %>%
+  ggplot(aes(x = Digitalizzazione, y = Totale, fill = Nazionalita)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = comma) +
+  labs(title = "Digitalizzazione - Musei Medio-Piccoli",
+       x = "Digitalizzazione",
+       y = "Numero di Visitatori") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Medi
+musei_digitalizzazione_medi <- musei_medi %>%
+  pivot_longer(cols = c(Totale_Italiani, Totale_Stranieri),
+               names_to = "Nazionalita",
+               values_to = "Totale")
+
+musei_digitalizzazione_medi %>%
+  filter(!is.na(Totale), !is.na(Digitalizzazione)) %>%
+  group_by(Nazionalita, Digitalizzazione) %>%
+  summarise(Totale = sum(Totale), .groups = "drop") %>%
+  ggplot(aes(x = Digitalizzazione, y = Totale, fill = Nazionalita)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = comma) +
+  labs(title = "Digitalizzazione - Musei Medi",
+       x = "Digitalizzazione",
+       y = "Numero di Visitatori") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Medio-Grandi
+musei_digitalizzazione_medio_grandi <- musei_medio_grandi %>%
+  pivot_longer(cols = c(Totale_Italiani, Totale_Stranieri),
+               names_to = "Nazionalita",
+               values_to = "Totale")
+
+musei_digitalizzazione_medio_grandi %>%
+  filter(!is.na(Totale), !is.na(Digitalizzazione)) %>%
+  group_by(Nazionalita, Digitalizzazione) %>%
+  summarise(Totale = sum(Totale), .groups = "drop") %>%
+  ggplot(aes(x = Digitalizzazione, y = Totale, fill = Nazionalita)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = comma) +
+  labs(title = "Digitalizzazione - Musei Medio-Grandi",
+       x = "Digitalizzazione",
+       y = "Numero di Visitatori") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# Grandi
+musei_digitalizzazione_grandi <- musei_grandi %>%
+  pivot_longer(cols = c(Totale_Italiani, Totale_Stranieri),
+               names_to = "Nazionalita",
+               values_to = "Totale")
+
+musei_digitalizzazione_grandi %>%
+  filter(!is.na(Totale), !is.na(Digitalizzazione)) %>%
+  group_by(Nazionalita, Digitalizzazione) %>%
+  summarise(Totale = sum(Totale), .groups = "drop") %>%
+  ggplot(aes(x = Digitalizzazione, y = Totale, fill = Nazionalita)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = comma) +   # <-- Numeri con separatore di migliaia
+  labs(title = "Digitalizzazione - Musei Grandi",
+       x = "Digitalizzazione",
+       y = "Numero di Visitatori") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+### 11.1 Verifica prerequisti ANOVA
+
+Per analizzare la relazione tra il numero di visitatori italiani e stranieri e la digitalizzazione, iniziamo verificando la normalità della distribuzione in ciascuna classe di grandezza, in modo da valutare la possibilità di applicare il test ANOVA.
+
+```{r echo=FALSE, warning=FALSE}
+#musei grandi
+normal_grandi_dig <- musei_grandi %>% 
+  drop_na(Visitatori_Totali, Digitalizzazione) %>%
+  group_by(Digitalizzazione) %>%            
+  summarise(
+  p_value_norm_mus_grandi=ks.test(Visitatori_Totali,"pnorm",mean(Visitatori_Totali),sd(Visitatori_Totali))$p.value)
+
+normal_grandi_dig
+
+
+#musei medio-grandi
+normal_medio_grandi_dig <- musei_medio_grandi %>% 
+  drop_na(Visitatori_Totali, Digitalizzazione) %>%       
+  group_by(Digitalizzazione) %>%            
+  summarise(
+  p_value_norm_mus_medio_grandi=ks.test(Visitatori_Totali,"pnorm",mean(Visitatori_Totali),sd(Visitatori_Totali))$p.value)
+
+normal_medio_grandi_dig
+
+
+#musei medi
+normal_medi_dig <- musei_medi %>% 
+  drop_na(Visitatori_Totali, Digitalizzazione) %>%       
+  group_by(Digitalizzazione) %>%            
+  summarise(
+  p_value_norm_mus_medi=ks.test(Visitatori_Totali,"pnorm",mean(Visitatori_Totali),sd(Visitatori_Totali))$p.value)
+
+normal_medi_dig
+
+
+#musei medio-piccoli
+normal_medio_piccoli_dig <- musei_medio_piccoli %>% 
+  drop_na(Visitatori_Totali, Digitalizzazione) %>%       
+  group_by(Digitalizzazione) %>%            
+  summarise(
+  p_value_norm_mus_medio_piccoli=ks.test(Visitatori_Totali,"pnorm",mean(Visitatori_Totali),sd(Visitatori_Totali))$p.value)
+
+normal_medio_piccoli_dig
+
+
+#musei piccoli
+normal_piccoli_dig <- musei_piccoli %>% 
+  drop_na(Visitatori_Totali, Digitalizzazione) %>%       
+  group_by(Digitalizzazione) %>%            
+  summarise(
+  p_value_norm_mus_piccoli=ks.test(Visitatori_Totali,"pnorm",mean(Visitatori_Totali),sd(Visitatori_Totali))$p.value)
+
+normal_piccoli_dig
+```
+
+Poiché anche in questo caso non viene soddisfatto il requisito della normalità, non possiamo procedere con l'ANOVA.
+
+### 11.2 Kruskal-Wallis per visitatori stranieri
+
+Per questa analisi, i dati sono stati suddivisi in due gruppi distinti: visitatori italiani e visitatori stranieri.
+Il test di Kruskal-Wallis è stato quindi applicato separatamente a ciascun gruppo per verificare se la digitalizzazione dei musei influisce in modo diverso sul numero medio di visitatori italiani rispetto a quello degli stranieri.
+Questa distinzione consente di valutare l’effetto della digitalizzazione in modo più preciso e mirato.
+
+```{r echo = FALSE}
+
+#musei grandi
+kruskal.test(Totale ~ Digitalizzazione, data = musei_digitalizzazione_grandi %>% filter(Nazionalita == "Totale_Stranieri"))
+
+#musei medio-grandi
+kruskal.test(Totale ~ Digitalizzazione, data = musei_digitalizzazione_medio_grandi %>% filter(Nazionalita == "Totale_Stranieri"))
+
+#musei medi
+kruskal.test(Totale ~ Digitalizzazione, data = musei_digitalizzazione_medi %>% filter(Nazionalita == "Totale_Stranieri"))
+
+#musei medio-piccoli
+kruskal.test(Totale ~ Digitalizzazione, data = musei_digitalizzazione_medio_piccoli %>% filter(Nazionalita == "Totale_Stranieri"))
+
+#musei piccoli
+kruskal.test(Totale ~ Digitalizzazione, data = musei_digitalizzazione_piccoli %>% filter(Nazionalita == "Totale_Stranieri"))
+```
+
+Analizzando i visitatori stranieri con il test di Kruskal-Wallis, emergono differenze significative nel numero medio di visitatori tra i vari livelli di digitalizzazione per alcune classi di musei.
+In particolare, per i musei di dimensioni piccole, medio-piccole e medio-grandi, il p-value è inferiore alla soglia di significatività convenzionale (0.05), indicando che la digitalizzazione ha un impatto rilevante sul numero di visitatori stranieri in queste categorie.
+Questo significa che almeno un livello di digitalizzazione si discosta significativamente dagli altri in termini di attrattività per i visitatori stranieri.
+
+Al contrario, per i musei medi e grandi, il test non ha rilevato differenze significative, suggerendo che in queste categorie la digitalizzazione non modifica in modo significativo il numero di visitatori stranieri.
+
+### 11.3 Kruskal-Wallis per visitatori italiani
+
+```{r echo = FALSE}
+
+#musei grandi
+kruskal.test(Totale ~ Digitalizzazione, data = musei_digitalizzazione_grandi %>% filter(Nazionalita == "Totale_Italiani"))
+
+#musei medio-grandi
+kruskal.test(Totale ~ Digitalizzazione, data = musei_digitalizzazione_medio_grandi %>% filter(Nazionalita == "Totale_Italiani"))
+
+#musei medi
+kruskal.test(Totale ~ Digitalizzazione, data = musei_digitalizzazione_medi %>% filter(Nazionalita == "Totale_Italiani"))
+
+#musei medio-piccoli
+kruskal.test(Totale ~ Digitalizzazione, data = musei_digitalizzazione_medio_piccoli %>% filter(Nazionalita == "Totale_Italiani"))
+
+#musei piccoli
+kruskal.test(Totale ~ Digitalizzazione, data = musei_digitalizzazione_piccoli %>% filter(Nazionalita == "Totale_Italiani"))
+```
+
+L’analisi tramite il test di Kruskal-Wallis sui visitatori italiani evidenzia differenze significative nel numero medio di visitatori tra i diversi livelli di digitalizzazione per la maggior parte delle classi di musei considerate.
+In particolare, per le categorie piccoli, medio-piccoli, medio-grandi e grandi, i p-value risultano inferiori alla soglia convenzionale di significatività (0.05), indicando che la digitalizzazione influenza in modo rilevante il numero medio di visitatori italiani.
+Questo suggerisce che almeno uno dei livelli di digitalizzazione differisce significativamente dagli altri in termini di attrattività per il pubblico italiano.
+
+Per la categoria dei musei medi, invece, il test non ha rilevato differenze significative (p-value \> 0.05), indicando che in questa classe di musei la digitalizzazione non sembra influenzare il numero medio di visitatori italiani in modo statisticamente significativo.
+
+### 11.4 Pairwise Wilcoxon test
+
+Poiché il test di Kruskal-Wallis ha evidenziato differenze significative nel numero medio di visitatori per alcune categorie di musei, è utile approfondire l’analisi con confronti a coppie (pairwise) tra i diversi livelli di digitalizzazione.
+
+```{r echo = FALSE, warning=FALSE}
+
+# dizionario di etichette brevi (per evitare che la tabella venga spezzata su due righe)
+lab <- c(
+  "Si, interamente"                               = "Si_intero",
+  "Si, una parte"                                 = "Si_parziale",
+  "No, non ancora"                                = "No_nonancora",
+  "No, non disponeva di beni da digitalizzare"    = "No_senzabeni"
+)
+
+# applica ai cinque data‑set (ripeti per ognuno)
+musei_digitalizzazione_piccoli$Digitalizzazione      <- fct_recode(musei_digitalizzazione_piccoli$Digitalizzazione, !!!lab)
+musei_digitalizzazione_medio_piccoli$Digitalizzazione <- fct_recode(musei_digitalizzazione_medio_piccoli$Digitalizzazione, !!!lab)
+musei_digitalizzazione_medi$Digitalizzazione          <- fct_recode(musei_digitalizzazione_medi$Digitalizzazione, !!!lab)
+musei_digitalizzazione_medio_grandi$Digitalizzazione  <- fct_recode(musei_digitalizzazione_medio_grandi$Digitalizzazione, !!!lab)
+musei_digitalizzazione_grandi$Digitalizzazione        <- fct_recode(musei_digitalizzazione_grandi$Digitalizzazione, !!!lab)
+
+# Piccoli - Italiani
+pairwise.wilcox.test(
+  musei_digitalizzazione_piccoli %>% filter(Nazionalita == "Totale_Italiani") %>% pull(Totale),
+  musei_digitalizzazione_piccoli %>% filter(Nazionalita == "Totale_Italiani") %>% pull(Digitalizzazione),
+  p.adjust.method = "bonferroni"
+)
+
+# Piccoli - Stranieri
+pairwise.wilcox.test(
+  musei_digitalizzazione_piccoli %>% filter(Nazionalita == "Totale_Stranieri") %>% pull(Totale),
+  musei_digitalizzazione_piccoli %>% filter(Nazionalita == "Totale_Stranieri") %>% pull(Digitalizzazione),
+  p.adjust.method = "bonferroni"
+)
+
+# Medio-Piccoli - Italiani
+pairwise.wilcox.test(
+  musei_digitalizzazione_medio_piccoli %>% filter(Nazionalita == "Totale_Italiani") %>% pull(Totale),
+  musei_digitalizzazione_medio_piccoli %>% filter(Nazionalita == "Totale_Italiani") %>% pull(Digitalizzazione),
+  p.adjust.method = "bonferroni"
+)
+
+# Medio-Piccoli - Stranieri
+pairwise.wilcox.test(
+  musei_digitalizzazione_medio_piccoli %>% filter(Nazionalita == "Totale_Stranieri") %>% pull(Totale),
+  musei_digitalizzazione_medio_piccoli %>% filter(Nazionalita == "Totale_Stranieri") %>% pull(Digitalizzazione),
+  p.adjust.method = "bonferroni"
+)
+
+# Medi - Italiani
+pairwise.wilcox.test(
+  musei_digitalizzazione_medi %>% filter(Nazionalita == "Totale_Italiani") %>% pull(Totale),
+  musei_digitalizzazione_medi %>% filter(Nazionalita == "Totale_Italiani") %>% pull(Digitalizzazione),
+  p.adjust.method = "bonferroni"
+)
+
+# Medi - Stranieri
+pairwise.wilcox.test(
+  musei_digitalizzazione_medi %>% filter(Nazionalita == "Totale_Stranieri") %>% pull(Totale),
+  musei_digitalizzazione_medi %>% filter(Nazionalita == "Totale_Stranieri") %>% pull(Digitalizzazione),
+  p.adjust.method = "bonferroni"
+)
+
+# Medio-Grandi - Italiani
+pairwise.wilcox.test(
+  musei_digitalizzazione_medio_grandi %>% filter(Nazionalita == "Totale_Italiani") %>% pull(Totale),
+  musei_digitalizzazione_medio_grandi %>% filter(Nazionalita == "Totale_Italiani") %>% pull(Digitalizzazione),
+  p.adjust.method = "bonferroni"
+)
+
+# Medio-Grandi - Stranieri
+pairwise.wilcox.test(
+  musei_digitalizzazione_medio_grandi %>% filter(Nazionalita == "Totale_Stranieri") %>% pull(Totale),
+  musei_digitalizzazione_medio_grandi %>% filter(Nazionalita == "Totale_Stranieri") %>% pull(Digitalizzazione),
+  p.adjust.method = "bonferroni"
+)
+
+# Grandi - Italiani
+pairwise.wilcox.test(
+  musei_digitalizzazione_grandi %>% filter(Nazionalita == "Totale_Italiani") %>% pull(Totale),
+  musei_digitalizzazione_grandi %>% filter(Nazionalita == "Totale_Italiani") %>% pull(Digitalizzazione),
+  p.adjust.method = "bonferroni"
+)
+
+# Grandi - Stranieri
+pairwise.wilcox.test(
+  musei_digitalizzazione_grandi %>% filter(Nazionalita == "Totale_Stranieri") %>% pull(Totale),
+  musei_digitalizzazione_grandi %>% filter(Nazionalita == "Totale_Stranieri") %>% pull(Digitalizzazione),
+  p.adjust.method = "bonferroni"
+)
+```
+
+Dall’analisi dei risultati emerge un quadro articolato ma coerente, che permette di avanzare alcune ipotesi interpretative sul ruolo della digitalizzazione nei musei italiani e sulla sua relazione con la presenza di visitatori, sia italiani che stranieri.
+
+In generale, la digitalizzazione appare associata a un aumento nel numero di visitatori italiani in quasi tutte le classi dimensionali considerate: dai musei piccoli a quelli medio-grandi.
+Questo suggerisce che la digitalizzazione delle opere abbia un impatto positivo sull’attrattività dell’istituzione per il pubblico nazionale.
+
+Per quanto riguarda il turismo internazionale, tuttavia, la relazione positiva con la digitalizzazione emerge solo nei musei di dimensioni medio-grandi e grandi.
+Nei musei più piccoli o di dimensione intermedia, l’effetto sui visitatori stranieri è assente o non significativo.
+Questo dato può essere interpretato ipotizzando che l’effetto della digitalizzazione sul turismo straniero sia condizionato dalla notorietà pregressa del museo.
+In altre parole, la digitalizzazione di per sé può facilitare e incentivare l’ingresso, ma è verosimilmente efficace solo quando il museo è già noto al pubblico internazionale.
+I musei piccoli, spesso a carattere locale o poco pubblicizzati all’estero, non riescono a beneficiare appieno dei vantaggi della digitalizzazione in termini di attrazione turistica internazionale.
+
+Si delinea dunque un’interpretazione secondo cui la digitalizzazione ha effetti differenti a seconda della scala e della visibilità del museo: nei piccoli e medio-piccoli rafforza l’afflusso interno, mentre nei grandi può contribuire concretamente all’attrazione di un pubblico internazionale.
+Non si tratta quindi di un effetto uniforme, ma piuttosto di una dinamica che dipende dalla sinergia tra strumenti digitali e condizioni strutturali preesistenti.
+
+Occorre infine ricordare che i dati osservati indicano associazioni, non necessariamente rapporti di causa-effetto.
+È possibile, ad esempio, che musei già frequentati e ben finanziati siano anche quelli più propensi o capaci di digitalizzare.
+
+## Conclusioni
+
+L’indagine statistica condotta sul dataset ISTAT 2022 ha permesso di analizzare in profondità il sistema museale italiano, mettendone in evidenza la complessità e le numerose variabili strutturali e territoriali che ne influenzano la fruizione. È emersa una forte disomogeneità nella distribuzione dei musei e dei visitatori, con concentrazioni marcate in alcune regioni e città, a conferma della centralizzazione dell’offerta culturale.
+
+Le analisi inferenziali hanno evidenziato come la categoria museale e il livello di digitalizzazione abbiano un impatto statisticamente significativo sui flussi di visitatori. In particolare, la digitalizzazione rappresenta un potenziale fattore di valorizzazione, soprattutto nei musei medio-grandi e grandi, dove contribuisce ad attrarre un pubblico più ampio, anche internazionale. Al contrario, nei musei di dimensioni più ridotte, la digitalizzazione sembra influenzare in misura maggiore il pubblico italiano, senza incidere significativamente sulla componente straniera.
+
+Il lavoro ha inoltre confermato che la differenza nei flussi di visitatori tra musei pubblici e privati non è statisticamente rilevante, a testimonianza del fatto che l’attrattività museale dipende più dalla categoria e dalle caratteristiche dell’offerta che dalla natura giuridica della gestione.
+
+I risultati ottenuti offrono spunti utili per riflessioni future in ambito culturale, turistico e gestionale, contribuendo alla comprensione dei fattori che incidono sulla fruizione del patrimonio museale italiano.
